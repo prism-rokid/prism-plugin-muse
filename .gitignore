@@ -1,0 +1,10 @@
+# Plugin package and local Go artifacts
+/dist/
+/muse
+/prism-plugin-muse
+/prism-plugin-muse.test
+/coverage.out
+
+# macOS metadata
+.DS_Store
+._*

@@ -1,0 +1,26 @@
+id: muse
+schema_version: 1
+version: 0.1.15
+display_name: Muse
+icon_url: https://registry.npmmirror.com/@lobehub/icons-static-avatar/latest/files/avatars/muse.webp
+icon_svg_url: https://registry.npmmirror.com/@lobehub/icons-static-svg/latest/files/icons/muse.svg
+description: Connects Muse personal-agent text chats in a macOS WebView to Prism.
+plugin_protocol_version: "4"
+min_hub_version: 0.1.0
+integration_mode: desktop-automation
+transport: process
+runtime_modes: [webview]
+default_runtime_mode: webview
+command: ["./muse"]
+capabilities:
+  native_visible_input: true
+  native_visible_output: true
+  can_forward_sync: true
+  can_list_sessions: true
+  can_attach_session: true
+  can_start_session_with_message: true
+  can_read_history: true
+  can_wait_run: true
+  can_reverse_sync: true
+  can_plugin_wide_watch: true
+  can_control_session: true
