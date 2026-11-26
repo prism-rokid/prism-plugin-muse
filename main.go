@@ -236,12 +236,37 @@ func (a *adapter) Probe(ctx context.Context) (sdk.Capability, error) {
 		CanWaitRun: true, CanReverseSync: true, CanPluginWideWatch: true, CanControlSession: true,
 	}
 	c.Available = err == nil && p.Ready
-	if err != nil {
-		c.UnavailableReason = err.Error()
-	} else if !p.Ready {
-		c.UnavailableReason = "Open Muse Web and finish signing in"
+	d := museDiagnostic(p, err)
+	c.Diagnostics = d
+	if !c.Available {
+		c.UnavailableReason = d.Summary
+		if d.Detail != "" {
+			c.UnavailableReason = d.Detail
+		}
 	}
 	return c, nil
+}
+
+func museDiagnostic(p page, err error) *sdk.Diagnostic {
+	facts := map[string]any{"transport": "webview", "transport_reachable": err == nil || p.Error != ""}
+	d := &sdk.Diagnostic{Component: "Muse Web", Facts: facts, Actions: []string{"recheck"}}
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		d.State, d.Code, d.Summary = "not_installed", "app_not_installed", "Muse Web 组件缺失"
+		d.Detail = "请检查插件安装包是否包含 Muse Web。"
+	case err != nil && p.Error == "":
+		d.State, d.Code, d.Summary = "unavailable", "control_channel_unreachable", "Muse Web 未能连接"
+		d.Detail = "读取 WebView 页面状态失败。"
+	case err == nil && p.Ready:
+		d.State, d.Code, d.Summary = "ready", "ready", "Muse 已连接"
+		d.Actions = nil
+	case p.NeedsSignIn:
+		d.State, d.Code, d.Summary = "unavailable", "authentication_required", "Muse 尚未登录"
+		d.Detail = "请在 Muse Web 中完成登录。"
+	default:
+		d.State, d.Code, d.Summary = "unavailable", "page_unavailable", "Muse Web 页面尚未就绪"
+	}
+	return d
 }
 
 func (a *adapter) Discover(ctx context.Context) (sdk.DiscoveryResult, error) {

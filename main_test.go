@@ -1,6 +1,15 @@
 package main
 
-import "testing"
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestReplyAfterKeepsReplyWithinSubmittedMessage(t *testing.T) {
 	messages := []message{
@@ -58,5 +67,54 @@ func TestHistoryKeepsPrismIdentityWhenMuseChangesUserID(t *testing.T) {
 			turns[1].Messages[0].ID != "user:request" {
 			t.Fatalf("unexpected turns for native ID %q: %#v", nativeID, turns)
 		}
+	}
+}
+
+func TestMuseProbeDiagnostics(t *testing.T) {
+	for _, fixture := range []struct {
+		page page
+		err  error
+		code string
+	}{
+		{err: os.ErrNotExist, code: "app_not_installed"},
+		{err: errors.New("fixture token=/private/path"), code: "control_channel_unreachable"},
+		{page: page{NeedsSignIn: true}, code: "authentication_required"},
+		{page: page{Error: "fixture token"}, err: errors.New("fixture token"), code: "page_unavailable"},
+		{code: "page_unavailable"},
+		{page: page{Ready: true}, code: "ready"},
+	} {
+		result := museDiagnostic(fixture.page, fixture.err)
+		if result.Code != fixture.code || strings.Contains(result.Detail, "fixture token") {
+			t.Fatalf("意外的诊断结果 %#v", result)
+		}
+	}
+}
+
+func TestMuseProbeStdioMissingWorker(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	worker := filepath.Join(filepath.Dir(executable), "Muse Web.app", "Contents", "MacOS", "MuseWeb")
+	if _, err := os.Stat(worker); !errors.Is(err, os.ErrNotExist) {
+		t.Skip("该测试需要独立构建目录中没有 WebView worker")
+	}
+	var output bytes.Buffer
+	request := strings.NewReader("{\"id\":\"probe\",\"method\":\"adapter.probe\"}\n")
+	if err := serve(context.Background(), &adapter{}, request, &output); err != nil {
+		t.Fatal(err)
+	}
+	var response struct {
+		OK      bool
+		Payload struct {
+			UnavailableReason string `json:"unavailable_reason"`
+			Diagnostics       struct{ Code string }
+		}
+	}
+	if err := json.Unmarshal(output.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if !response.OK || response.Payload.Diagnostics.Code != "app_not_installed" || response.Payload.UnavailableReason == "" {
+		t.Fatalf("意外的探测结果 %s", output.String())
 	}
 }
